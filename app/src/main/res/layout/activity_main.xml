@@ -83,151 +83,12 @@
                     android:id="@+id/tv_video_meta"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="1.2M views • ...more"
+                    android:text="YouTube Long-form Content"
                     android:textColor="@color/yt_text_secondary"
                     android:textSize="12sp"
                     android:layout_marginTop="4dp"/>
             </LinearLayout>
 
-            <!-- Channel Bar -->
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="12dp"
-                android:paddingBottom="12dp">
-
-                <ImageView
-                    android:id="@+id/img_channel_avatar"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/ic_play_arrow"
-                    android:backgroundTint="#555555"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintBottom_toBottomOf="parent"/>
-
-                <TextView
-                    android:id="@+id/tv_channel_name"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Channel Name"
-                    android:textColor="@color/yt_text_primary"
-                    android:textStyle="bold"
-                    android:textSize="14sp"
-                    android:layout_marginStart="12dp"
-                    app:layout_constraintStart_toEndOf="@id/img_channel_avatar"
-                    app:layout_constraintTop_toTopOf="parent"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Subscriber count"
-                    android:textColor="@color/yt_text_secondary"
-                    android:textSize="12sp"
-                    android:layout_marginStart="12dp"
-                    app:layout_constraintStart_toEndOf="@id/img_channel_avatar"
-                    app:layout_constraintTop_toBottomOf="@id/tv_channel_name"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Subscribe"
-                    android:background="@drawable/bg_subscribe_button"
-                    android:textColor="@android:color/black"
-                    android:textStyle="bold"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="8dp"
-                    android:textSize="14sp"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintBottom_toBottomOf="parent"/>
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-            <!-- Actions Scroll View -->
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:scrollbars="none"
-                android:paddingHorizontal="12dp"
-                android:paddingBottom="12dp"
-                android:clipToPadding="false">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <!-- Like -->
-                    <LinearLayout
-                        android:background="@drawable/bg_action_chip"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:gravity="center"
-                        android:paddingHorizontal="12dp"
-                        android:layout_marginEnd="8dp">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@drawable/ic_thumb_up"
-                            app:tint="@color/yt_text_primary"/>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Like"
-                            android:textColor="@color/yt_text_primary"
-                            android:textStyle="bold"
-                            android:layout_marginStart="6dp"/>
-                    </LinearLayout>
-
-                    <!-- Share -->
-                    <LinearLayout
-                        android:background="@drawable/bg_action_chip"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:gravity="center"
-                        android:paddingHorizontal="12dp"
-                        android:layout_marginEnd="8dp">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@drawable/ic_share"
-                            app:tint="@color/yt_text_primary"/>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Share"
-                            android:textColor="@color/yt_text_primary"
-                            android:textStyle="bold"
-                            android:layout_marginStart="6dp"/>
-                    </LinearLayout>
-
-                    <!-- Save -->
-                    <LinearLayout
-                        android:id="@+id/btn_action_save"
-                        android:background="@drawable/bg_action_chip"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:gravity="center"
-                        android:paddingHorizontal="12dp">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@drawable/ic_more_vert"
-                            android:rotation="90"
-                            app:tint="@color/yt_text_primary"/>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Save"
-                            android:textColor="@color/yt_text_primary"
-                            android:textStyle="bold"
-                            android:layout_marginStart="6dp"/>
-                    </LinearLayout>
-
-                </LinearLayout>
-            </HorizontalScrollView>
-            
             <View 
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -241,21 +102,33 @@
                 android:padding="16dp"
                 android:background="@color/yt_surface">
                 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Novel Player Controls"
-                    android:textColor="@color/yt_text_secondary"
-                    android:textSize="12sp"
-                    android:layout_gravity="center_horizontal"/>
-
                 <LinearLayout
                     android:id="@+id/controls_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="12dp">
+                    android:orientation="horizontal">
+
+                    <!-- Favorite -->
+                    <ImageButton
+                        android:id="@+id/btn_favorite"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_star_border"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"/>
+
+                    <!-- History -->
+                    <ImageButton
+                        android:id="@+id/btn_history"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_history"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:layout_marginEnd="16dp"/>
 
                     <ImageButton
                         android:id="@+id/btn_rewind"
@@ -264,13 +137,12 @@
                         android:src="@drawable/ic_replay_10"
                         app:tint="@color/yt_text_primary"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        android:scaleType="fitCenter"
                         android:padding="8dp"/>
 
                     <FrameLayout
                         android:layout_width="64dp"
                         android:layout_height="64dp"
-                        android:layout_marginHorizontal="24dp"
+                        android:layout_marginHorizontal="12dp"
                         android:background="@drawable/bg_subscribe_button"
                         android:backgroundTint="@color/yt_white">
                          <ImageButton
@@ -280,7 +152,6 @@
                             android:src="@drawable/ic_play_arrow"
                             app:tint="@color/yt_black"
                             android:background="?attr/selectableItemBackgroundBorderless"
-                            android:scaleType="fitCenter"
                             android:padding="12dp"/>
                     </FrameLayout>
 
@@ -291,8 +162,18 @@
                         android:src="@drawable/ic_forward_30"
                         app:tint="@color/yt_text_primary"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        android:scaleType="fitCenter"
                         android:padding="8dp"/>
+
+                    <!-- Save -->
+                    <ImageButton
+                        android:id="@+id/btn_action_save"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_playlist_add"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:layout_marginStart="16dp"/>
                 </LinearLayout>
                 
                  <Button
@@ -305,42 +186,6 @@
                     android:layout_gravity="center_horizontal"
                     android:layout_marginTop="8dp"/>
             </LinearLayout>
-            
-            <View 
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/yt_divider"/>
-
-            <!-- Comments Teaser -->
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="12dp">
-
-                <TextView
-                    android:id="@+id/tv_comments_header"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Comments"
-                    android:textColor="@color/yt_text_primary"
-                    android:textStyle="bold"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"/>
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:text="This web view approach works much better for restricted videos!"
-                    android:textColor="@color/yt_text_primary"
-                    android:textSize="12sp"
-                    android:maxLines="2"
-                    android:ellipsize="end"
-                    android:layout_marginTop="8dp"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/tv_comments_header"/>
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
             
             <View 
                 android:layout_width="match_parent"
@@ -361,7 +206,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:hint="YouTube Video ID"
+                    android:hint="YouTube Video ID or URL"
                     android:textColor="@color/yt_text_primary"
                     android:textColorHint="@color/yt_text_secondary"
                     android:backgroundTint="@color/yt_text_secondary"/>
@@ -387,7 +232,7 @@
                 android:id="@+id/btn_pip"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Enter PiP Mode"
+                android:text="Enter Picture-in-Picture"
                 android:backgroundTint="@color/yt_surface"
                 android:textColor="@color/yt_text_primary"
                 android:layout_margin="16dp"/>
