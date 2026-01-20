@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.YouTubeNovelPlayer" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/yt_black</item>
+        <item name="colorPrimaryDark">@color/yt_black</item>
+        <item name="colorAccent">@color/yt_red</item>
+    </style>
+</resources>

@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">YT Novel Player</string>
+    <string name="load_video">Load Video</string>
+    <string name="rewind_15">-15s</string>
+    <string name="forward_30">+30s</string>
+    <string name="enter_pip">PiP Mode</string>
+    <string name="play_pause">Play/Pause</string>
+    <string name="speed_format">Speed: %.2fx</string>
+    <string name="resuming_at">Resuming at %s</string>
+    <string name="login_to_save">Please login to save to playlist</string>
+    <string name="clicked_format">Clicked: %s</string>
+    <string name="active_local_profile">Active: Local Profile</string>
+    <string name="setup_required_client_id">Setup Required: Add Client ID in Code</string>
+    <string name="youtube_api_fetch_msg">YouTube API fetch would happen here</string>
+    <string name="signed_out">Signed out</string>
+    <string name="added_to_playlist">Added to Playlist</string>
+    <string name="already_in_playlist">Already in Playlist</string>
+    <string name="playlist_empty">Playlist is empty</string>
+</resources>
