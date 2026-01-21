@@ -476,14 +476,190 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoggedInMenu() {
-        val options = arrayOf("My YouTube Videos", "Sign Out")
+        val options = arrayOf(
+            "My YouTube Videos",
+            "📺 Watch Later (WebView)",  // 新增
+            "Sign Out"
+        )
         AlertDialog.Builder(this).setItems(options) { _, which ->
-            if (which == 0) fetchUserVideos() else googleSignInClient.signOut().addOnCompleteListener {
-                authMode = AuthMode.NONE
-                updateLoginIcon()
+            when (which) {
+                0 -> fetchUserVideos()
+                1 -> fetchWatchLaterWebView()  // 新功能
+                2 -> googleSignInClient.signOut().addOnCompleteListener {
+                    authMode = AuthMode.NONE
+                    updateLoginIcon()
+                }
             }
         }.show()
     }
+    
+    // ========== WebView Playlist Functions ==========
+    
+    data class PlaylistVideo(
+        val title: String,
+        val id: String
+    )
+    
+    private var isExtractingPlaylist = false
+    
+    private fun fetchWatchLaterWebView() {
+        if (isExtractingPlaylist) {
+            Toast.makeText(this, "正在讀取播放清單,請稍候...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        isExtractingPlaylist = true
+        
+        // Show loading dialog
+        val loadingDialog = AlertDialog.Builder(this)
+            .setTitle("讀取 YouTube 稍後觀看")
+            .setMessage("正在載入播放清單,請稍候...")
+            .setCancelable(false)
+            .create()
+        loadingDialog.show()
+        
+        // Load Watch Later playlist
+        webView.loadUrl("https://www.youtube.com/playlist?list=WL")
+        
+        // Wait for page to load then extract data
+        webView.postDelayed({
+            extractPlaylistData { videos ->
+                loadingDialog.dismiss()
+                isExtractingPlaylist = false
+                
+                if (videos.isEmpty()) {
+                    Toast.makeText(this, "未找到影片或需要登入 YouTube", Toast.LENGTH_LONG).show()
+                    // Optionally show YouTube login page
+                    showYouTubeLoginPrompt()
+                } else {
+                    showPlaylistDialog(videos, "YouTube 稍後觀看")
+                }
+            }
+        }, 3000) // Wait 3 seconds for page to load
+    }
+    
+    private fun extractPlaylistData(callback: (List<PlaylistVideo>) -> Unit) {
+        val jsCode = """
+            (function() {
+                const videos = [];
+                
+                // Try multiple selectors for compatibility
+                const selectors = [
+                    'ytd-playlist-video-renderer',
+                    'ytd-video-renderer',
+                    'ytd-compact-video-renderer'
+                ];
+                
+                for (const selector of selectors) {
+                    const items = document.querySelectorAll(selector);
+                    if (items.length > 0) {
+                        items.forEach(item => {
+                            try {
+                                // Try different title selectors
+                                const titleEl = item.querySelector('#video-title') || 
+                                               item.querySelector('a#video-title-link') ||
+                                               item.querySelector('.title');
+                                
+                                // Try different link selectors  
+                                const linkEl = item.querySelector('a#thumbnail') ||
+                                              item.querySelector('a.ytd-thumbnail') ||
+                                              item.querySelector('a[href*="watch"]');
+                                
+                                if (titleEl && linkEl) {
+                                    const title = titleEl.textContent.trim();
+                                    const href = linkEl.href;
+                                    
+                                    // Extract video ID from URL
+                                    const match = href.match(/[?&]v=([^&]+)/);
+                                    const videoId = match ? match[1] : null;
+                                    
+                                    if (videoId && title) {
+                                        videos.push({
+                                            title: title,
+                                            id: videoId
+                                        });
+                                    }
+                                }
+                            } catch(e) {
+                                console.error('Error extracting video:', e);
+                            }
+                        });
+                        
+                        if (videos.length > 0) break; // Found videos, stop trying
+                    }
+                }
+                
+                return JSON.stringify(videos);
+            })()
+        """.trimIndent()
+        
+        webView.evaluateJavascript(jsCode) { result ->
+            try {
+                // Remove quotes and unescape
+                val json = result?.trim('"')?.replace("\\\"", "\"")?.replace("\\n", "") ?: "[]"
+                
+                // Parse JSON
+                val type = object : TypeToken<List<PlaylistVideo>>() {}.type
+                val videos: List<PlaylistVideo> = gson.fromJson(json, type)
+                
+                callback(videos)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                callback(emptyList())
+            }
+        }
+    }
+    
+    private fun showYouTubeLoginPrompt() {
+        AlertDialog.Builder(this)
+            .setTitle("需要登入 YouTube")
+            .setMessage("請先在應用中登入 YouTube 帳號以訪問播放清單。\n\n點擊確定將開啟 YouTube 首頁供您登入。")
+            .setPositiveButton("確定") { _, _ ->
+                webView.loadUrl("https://www.youtube.com")
+                Toast.makeText(this, "請在 YouTube 首頁完成登入", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+    
+    private fun showPlaylistDialog(videos: List<PlaylistVideo>, title: String) {
+        val titles = videos.map { "${it.title}" }.toTypedArray()
+        
+        AlertDialog.Builder(this)
+            .setTitle("$title (${videos.size} 個影片)")
+            .setItems(titles) { _, which ->
+                val video = videos[which]
+                loadWebVideo(video.id)
+                if (::tvVideoTitle.isInitialized) tvVideoTitle.text = video.title
+                if (::etVideoId.isInitialized) etVideoId.setText(video.id)
+                Toast.makeText(this, "正在載入: ${video.title}", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("全部導入到收藏") { _, _ ->
+                importPlaylistToFavorites(videos)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+    
+    private fun importPlaylistToFavorites(videos: List<PlaylistVideo>) {
+        var imported = 0
+        videos.forEach { video ->
+            if (mySavedVideos.none { it.id == video.id }) {
+                mySavedVideos.add(SavedVideo("${video.title} [YouTube Playlist]", video.id))
+                imported++
+            }
+        }
+        
+        if (imported > 0) {
+            getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit {
+                putString("my_playlist", gson.toJson(mySavedVideos))
+            }
+            Toast.makeText(this, "已導入 $imported 個影片到收藏", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "所有影片都已在收藏中", Toast.LENGTH_SHORT).show()
+        }
+    }
+
 
     private fun addToPlaylist(category: String = "General") {
         if (mySavedVideos.none { it.id == currentVideoId }) {
