@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     enum class AuthMode { NONE, LOCAL, GOOGLE }
     private var authMode = AuthMode.NONE
     private val gson = Gson()
+    private var isAdSkipEnabled = false
     
     private lateinit var googleSignInClient: GoogleSignInClient
     
@@ -103,6 +104,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         initUI()
+        
+        // Load Ad Skip preference
+        val prefs = getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE)
+        isAdSkipEnabled = prefs.getBoolean("ad_skip_enabled", false)
+        
         initWebView()
         initGoogleAuth()
         
@@ -163,6 +169,12 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                updatePlaybackService(isPlaying)
+                
+                // Inject Ad Skip script if enabled
+                if (isAdSkipEnabled) {
+                    injectAdSkipScript()
+                }
                 val js = """
                     (function() {
                         var style = document.createElement('style');
@@ -466,31 +478,110 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoginDialog() {
-        val options = arrayOf("Sign in with Google", "Local Guest")
+        val adSkipStatus = if (isAdSkipEnabled) "ON" else "OFF"
+        val options = arrayOf(
+            "Sign in with Google", 
+            "Local Guest",
+            "🔇 Auto Mute: $adSkipStatus"
+        )
         AlertDialog.Builder(this).setItems(options) { _, which ->
-            if (which == 0) signInLauncher.launch(googleSignInClient.signInIntent) else {
-                authMode = AuthMode.LOCAL
-                updateLoginIcon()
+            when (which) {
+                0 -> signInLauncher.launch(googleSignInClient.signInIntent)
+                1 -> {
+                    authMode = AuthMode.LOCAL
+                    updateLoginIcon()
+                }
+                2 -> toggleAdSkip()
             }
         }.show()
     }
 
     private fun showLoggedInMenu() {
+        val adSkipStatus = if (isAdSkipEnabled) "ON" else "OFF"
         val options = arrayOf(
             "My YouTube Videos",
-            "📺 Watch Later (WebView)",  // 新增
+            "📺 Watch Later (WebView)",
+            "🔇 Auto Mute: $adSkipStatus",
             "Sign Out"
         )
         AlertDialog.Builder(this).setItems(options) { _, which ->
             when (which) {
                 0 -> fetchUserVideos()
-                1 -> fetchWatchLaterWebView()  // 新功能
-                2 -> googleSignInClient.signOut().addOnCompleteListener {
+                1 -> fetchWatchLaterWebView()
+                2 -> toggleAdSkip()
+                3 -> googleSignInClient.signOut().addOnCompleteListener {
                     authMode = AuthMode.NONE
                     updateLoginIcon()
                 }
             }
         }.show()
+    }
+    
+    private fun toggleAdSkip() {
+        isAdSkipEnabled = !isAdSkipEnabled
+        getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit {
+            putBoolean("ad_skip_enabled", isAdSkipEnabled)
+        }
+        
+        val status = if (isAdSkipEnabled) "已開啟" else "已關閉"
+        val msg = if (isAdSkipEnabled) "廣告將自動靜音並嘗試略過" else "自動靜音功能已停用"
+        
+        Toast.makeText(this, "Auto Mute $status\n$msg", Toast.LENGTH_SHORT).show()
+        
+        // Apply immediately if enabled
+        if (isAdSkipEnabled) {
+            injectAdSkipScript()
+        } else {
+            // Reload to clear script if disabled
+            webView.reload()
+        }
+    }
+    
+    private fun injectAdSkipScript() {
+        val jsCode = """
+            (function() {
+                if (window.adSkipperInterval) return; // Prevent multiple injections
+                
+                console.log("Auto Mute Started");
+                window.adSkipperInterval = setInterval(function() {
+                    try {
+                        var video = document.querySelector('video');
+                        var skipBtn = document.querySelector('.ytp-ad-skip-button') || 
+                                     document.querySelector('.ytp-ad-skip-button-modern') || 
+                                     document.querySelector('.ytp-skip-ad-button');
+                        var adOverlay = document.querySelector('.ad-interrupting') || 
+                                       document.querySelector('.video-ads .ad-container');
+                        
+                        // Check if ad is actually playing (overlay exists and has children)
+                        if (adOverlay && adOverlay.children.length > 0) {
+                            // Ad is present
+                            if (video && !video.muted) {
+                                video.muted = true;
+                                console.log("Ad Detected: Muted");
+                            }
+                            
+                            if (skipBtn) {
+                                skipBtn.click();
+                                console.log("Ad Skipped");
+                            } else {
+                                // Try to fast forward ad if no skip button (risky, maybe just mute is enough)
+                                // if (video) video.currentTime = video.duration || 1000;
+                            }
+                        } else {
+                            // No ad detected
+                            if (video && video.muted) {
+                                video.muted = false; // Unmute
+                                console.log("Ad Gone: Unmuted");
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Auto Mute Error", e);
+                    }
+                }, 1000);
+            })();
+        """.trimIndent()
+        
+        webView.evaluateJavascript(jsCode, null)
     }
     
     // ========== WebView Playlist Functions ==========
