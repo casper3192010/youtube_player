@@ -78,15 +78,6 @@
                     android:textStyle="bold"
                     android:maxLines="2"
                     android:ellipsize="end"/>
-
-                <TextView
-                    android:id="@+id/tv_video_meta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="YouTube Long-form Content"
-                    android:textColor="@color/yt_text_secondary"
-                    android:textSize="12sp"
-                    android:layout_marginTop="4dp"/>
             </LinearLayout>
 
             <View 
@@ -102,6 +93,7 @@
                 android:padding="16dp"
                 android:background="@color/yt_surface">
                 
+                <!-- First Row: Main Playback Controls -->
                 <LinearLayout
                     android:id="@+id/controls_container"
                     android:layout_width="match_parent"
@@ -109,11 +101,21 @@
                     android:gravity="center"
                     android:orientation="horizontal">
 
+                    <!-- Save to Playlist -->
+                    <ImageButton
+                        android:id="@+id/btn_action_save"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_playlist_add"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"/>
+
                     <!-- Favorite -->
                     <ImageButton
                         android:id="@+id/btn_favorite"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
                         android:src="@drawable/ic_star_border"
                         app:tint="@color/yt_text_primary"
                         android:background="?attr/selectableItemBackgroundBorderless"
@@ -122,27 +124,29 @@
                     <!-- History -->
                     <ImageButton
                         android:id="@+id/btn_history"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:src="@drawable/ic_history"
-                        app:tint="@color/yt_text_primary"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:padding="8dp"
-                        android:layout_marginEnd="16dp"/>
-
-                    <ImageButton
-                        android:id="@+id/btn_rewind"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
-                        android:src="@drawable/ic_replay_10"
+                        android:src="@drawable/ic_history"
                         app:tint="@color/yt_text_primary"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:padding="8dp"/>
 
+                    <!-- Rewind 15s -->
+                    <ImageButton
+                        android:id="@+id/btn_rewind"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/ic_replay_10"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:layout_marginHorizontal="4dp"/>
+
+                    <!-- Play/Pause (Center) -->
                     <FrameLayout
-                        android:layout_width="64dp"
-                        android:layout_height="64dp"
-                        android:layout_marginHorizontal="12dp"
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:layout_marginHorizontal="8dp"
                         android:background="@drawable/bg_subscribe_button"
                         android:backgroundTint="@color/yt_white">
                          <ImageButton
@@ -152,39 +156,79 @@
                             android:src="@drawable/ic_play_arrow"
                             app:tint="@color/yt_black"
                             android:background="?attr/selectableItemBackgroundBorderless"
-                            android:padding="12dp"/>
+                            android:padding="14dp"/>
                     </FrameLayout>
 
+                    <!-- Forward 30s -->
                     <ImageButton
                         android:id="@+id/btn_forward"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
                         android:src="@drawable/ic_forward_30"
                         app:tint="@color/yt_text_primary"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        android:padding="8dp"/>
-
-                    <!-- Save -->
-                    <ImageButton
-                        android:id="@+id/btn_action_save"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:src="@drawable/ic_playlist_add"
-                        app:tint="@color/yt_text_primary"
-                        android:background="?attr/selectableItemBackgroundBorderless"
                         android:padding="8dp"
-                        android:layout_marginStart="16dp"/>
+                        android:layout_marginHorizontal="4dp"/>
                 </LinearLayout>
                 
-                 <Button
-                    android:id="@+id/btn_speed"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="wrap_content"
+                <!-- Second Row: Speed Controls + PIP -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Speed: 1.0x"
-                    android:textColor="@color/yt_text_secondary"
-                    android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="8dp"/>
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="12dp"
+                    android:paddingVertical="8dp">
+
+                    <!-- PIP Button -->
+                    <ImageButton
+                        android:id="@+id/btn_pip_small"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_picture_in_picture"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:scaleType="fitCenter"
+                        android:padding="8dp"
+                        android:layout_marginEnd="16dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="播放速度："
+                        android:textColor="@color/yt_text_secondary"
+                        android:textSize="14sp"
+                        android:layout_marginEnd="8dp"/>
+
+                    <ImageButton
+                        android:id="@+id/btn_speed_down"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@drawable/ic_remove"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="6dp"/>
+
+                    <TextView
+                        android:id="@+id/tv_speed_display"
+                        android:layout_width="80dp"
+                        android:layout_height="wrap_content"
+                        android:text="1.000x"
+                        android:textColor="@color/yt_text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:layout_marginHorizontal="8dp"/>
+
+                    <ImageButton
+                        android:id="@+id/btn_speed_up"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@drawable/ic_add"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="6dp"/>
+                </LinearLayout>
             </LinearLayout>
             
             <View 
@@ -206,7 +250,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:hint="YouTube Video ID or URL"
+                    android:hint="Paste URL or ID"
                     android:textColor="@color/yt_text_primary"
                     android:textColorHint="@color/yt_text_secondary"
                     android:backgroundTint="@color/yt_text_secondary"/>
@@ -219,23 +263,6 @@
                     android:backgroundTint="@color/yt_surface"
                     android:textColor="@color/yt_text_primary"/>
             </LinearLayout>
-
-            <!-- Recommendations -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rv_recommendations"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false"
-                tools:listitem="@layout/item_video_recommendation"/>
-            
-            <Button
-                android:id="@+id/btn_pip"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Enter Picture-in-Picture"
-                android:backgroundTint="@color/yt_surface"
-                android:textColor="@color/yt_text_primary"
-                android:layout_margin="16dp"/>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
