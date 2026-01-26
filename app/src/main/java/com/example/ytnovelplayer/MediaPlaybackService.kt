@@ -15,38 +15,69 @@ import androidx.media.session.MediaButtonReceiver
 
 class MediaPlaybackService : Service() {
 
+
+
     private lateinit var mediaSession: MediaSessionCompat
     private val CHANNEL_ID = "playback_channel"
     private val NOTIFICATION_ID = 1
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+
+    private lateinit var audioManager: android.media.AudioManager
+    private var audioFocusRequest: android.media.AudioFocusRequest? = null
+
+    
+    // Audio Focus Listener
+    private val audioFocusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            android.media.AudioManager.AUDIOFOCUS_LOSS -> {
+                // Permanent loss of audio focus, pause playback
+                PlaybackController.triggerPause()
+            }
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // Temporary loss of audio focus, pause playback
+                PlaybackController.triggerPause()
+            }
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // Lower the volume (optional, implementing pause for now)
+                // In a real app we might lower volume, but for WebView video it's easier to just let it play or pause
+            }
+            android.media.AudioManager.AUDIOFOCUS_GAIN -> {
+                // Regained focus, resume playback if we were playing
+                PlaybackController.triggerPlay()
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         
+        audioManager = getSystemService(android.media.AudioManager::class.java)
+        
+        // Acquire WakeLock to keep CPU running during playback
+        val powerManager = getSystemService(android.os.PowerManager::class.java)
+        wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "YouTubeNovelPlayer:PlaybackWakeLock")
+        
         mediaSession = MediaSessionCompat(this, "MediaPlaybackService")
+        mediaSession.isActive = true 
         
         val stateBuilder = PlaybackStateCompat.Builder()
             .setActions(
                 PlaybackStateCompat.ACTION_PLAY or
                 PlaybackStateCompat.ACTION_PAUSE or
                 PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackStateCompat.ACTION_PLAY_PAUSE
             )
         mediaSession.setPlaybackState(stateBuilder.build())
         
+        
         mediaSession.setCallback(object : MediaSessionCompat.Callback() {
-            override fun onPlay() {
-                sendBroadcast(Intent("ACTION_PLAY"))
-            }
-            override fun onPause() {
-                sendBroadcast(Intent("ACTION_PAUSE"))
-            }
-            override fun onSkipToNext() {
-                sendBroadcast(Intent("ACTION_NEXT"))
-            }
-            override fun onSkipToPrevious() {
-                sendBroadcast(Intent("ACTION_PREV"))
-            }
+            override fun onPlay() { PlaybackController.triggerPlay() }
+            override fun onPause() { PlaybackController.triggerPause() }
+            override fun onSkipToNext() { PlaybackController.triggerSeekForward() }
+            override fun onSkipToPrevious() { PlaybackController.triggerSeekBackward() }
         })
+
 
         createNotificationChannel()
     }
@@ -64,27 +95,103 @@ class MediaPlaybackService : Service() {
         }
     }
 
+
+    private fun requestAudioFocus(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+            
+            val res = audioManager.requestAudioFocus(audioFocusRequest!!)
+            res == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            val res = audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                android.media.AudioManager.STREAM_MUSIC,
+                android.media.AudioManager.AUDIOFOCUS_GAIN
+            )
+            res == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val title = intent?.getStringExtra("VIDEO_TITLE") ?: "YouTube Novel Player"
         val isPlaying = intent?.getBooleanAsDefault("IS_PLAYING", false) ?: false
         
+        // Ensure MediaSession is always active to receive button events
+        mediaSession.isActive = true
+        
+        // Manage WakeLock and Audio Focus
+        if (isPlaying) {
+            if (wakeLock?.isHeld == false) wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24 hours max
+            requestAudioFocus()
+            
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                    .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_PAUSE or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                    .build()
+            )
+        } else {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+            // Don't abandon focus immediately on pause, let the user manually resume or use another app to steal focus
+            // abandonAudioFocus() 
+            
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 0.0f)
+                    .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                    .build()
+            )
+        }
+        
         val notification = buildNotification(title, isPlaying)
         startForeground(NOTIFICATION_ID, notification)
         
-        return START_STICKY
+        return START_NOT_STICKY
     }
+
 
     private fun buildNotification(title: String, isPlaying: Boolean): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
-        val playPauseAction = if (isPlaying) {
-            NotificationCompat.Action(R.drawable.ic_pause, "Pause", 
-                MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PAUSE))
-        } else {
-            NotificationCompat.Action(R.drawable.ic_play_arrow, "Play", 
-                MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY))
-        }
+        // Use MediaButtonReceiver to build standard media intents that route to MediaSession
+        val playAction = NotificationCompat.Action(
+            R.drawable.ic_play_arrow, "Play",
+            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY)
+        )
+        val pauseAction = NotificationCompat.Action(
+            R.drawable.ic_pause, "Pause",
+            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PAUSE)
+        )
+        val nextAction = NotificationCompat.Action(
+            R.drawable.ic_forward_30, "Next",
+            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
+        )
+        val prevAction = NotificationCompat.Action(
+            R.drawable.ic_replay_10, "Prev",
+            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+        )
+
+        val playPauseAction = if (isPlaying) pauseAction else playAction
 
         // Truncate title if too long for compact view
         val displayTitle = if (title.length > 40) "${title.take(37)}..." else title
@@ -99,13 +206,11 @@ class MediaPlaybackService : Service() {
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             // Previous (Rewind 15s)
-            .addAction(R.drawable.ic_replay_10, "Prev", 
-                MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
+            .addAction(prevAction)
             // Play/Pause
             .addAction(playPauseAction)
             // Next (Forward 30s)
-            .addAction(R.drawable.ic_forward_30, "Next", 
-                MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
+            .addAction(nextAction)
             .setStyle(androidx.media.app.NotificationCompat.MediaStyle()
                 .setMediaSession(mediaSession.sessionToken)
                 .setShowActionsInCompactView(0, 1, 2) // Show all 3 buttons in compact view
@@ -122,6 +227,7 @@ class MediaPlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        if (wakeLock?.isHeld == true) wakeLock?.release()
         mediaSession.release()
         super.onDestroy()
     }

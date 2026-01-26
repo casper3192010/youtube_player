@@ -46,7 +46,7 @@ import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), PlaybackController.Callback {
 
     private lateinit var webView: WebView
     private var currentVideoId = "M7lc1UVf-VE" 
@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnFavorite: ImageButton
     private lateinit var btnHistory: ImageButton
     private lateinit var tvVideoTitle: TextView
-    private lateinit var tvSpeedDisplay: TextView
+    private lateinit var btnRestoreProgress: ImageButton // New Button
 
     enum class AuthMode { NONE, LOCAL, GOOGLE }
     private var authMode = AuthMode.NONE
@@ -71,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private var isAdSkipEnabled = false
     
     private lateinit var googleSignInClient: GoogleSignInClient
+    private var isPendingAddToFavorites = false
     
     // Auto-save timer for playback state
     private val saveHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -82,26 +83,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            handleSignInResult(task.result)
-        }
-    }
-
-    private val mediaReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                "ACTION_PLAY" -> playVideo()
-                "ACTION_PAUSE" -> pauseVideo()
-                "ACTION_NEXT" -> webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime += 30", null)
-                "ACTION_PREV" -> webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime -= 15", null)
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            handleSignInResult(account)
+        } catch (e: com.google.android.gms.common.api.ApiException) {
+            // Log specific error code for debugging
+            val msg = when (e.statusCode) {
+                10 -> "Sign-in Failed: 10 (Developer Error). SHA-1 fingerprint mismatch?"
+                12500 -> "Sign-in Failed: 12500. Updates required?"
+                7 -> "Sign-in Failed: 7. Network error?"
+                else -> "Google Sign-In Failed: ${e.statusCode}"
             }
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            e.printStackTrace()
         }
     }
 
+    // Removed dynamic BroadcastReceiver in favor of direct Controller
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        checkOverlayPermission()
+        
+        // Register Controller...
+        PlaybackController.listener = this
 
         initUI()
         
@@ -112,23 +120,98 @@ class MainActivity : AppCompatActivity() {
         initWebView()
         initGoogleAuth()
         
-        val filter = IntentFilter().apply {
-            addAction("ACTION_PLAY")
-            addAction("ACTION_PAUSE")
-            addAction("ACTION_NEXT")
-            addAction("ACTION_PREV")
+        // Handle Shared Intent
+        handleIntent(intent)
+        if (!isPendingAddToFavorites) {
+            // Restore last playback state only if not loading a shared video
+            restorePlaybackState()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(mediaReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(mediaReceiver, filter)
-        }
-        
-        // Restore last playback state
-        restorePlaybackState()
         
         // Start auto-save timer
         saveHandler.postDelayed(autoSaveRunnable, 5000)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND && "text/plain" == intent.type) {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+            val videoId = extractVideoId(sharedText)
+            if (videoId != null) {
+                isPendingAddToFavorites = true
+                
+                // If initializing, currentVideoId will be picked up by initWebView -> loadWebVideo
+                currentVideoId = videoId
+                
+                if (::webView.isInitialized) {
+                     loadWebVideo(videoId)
+                     Toast.makeText(this, "正在載入影片...", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    // PlaybackController Implementation
+    override fun onControllerPlay() {
+        runOnUiThread { playVideo() }
+    }
+
+    override fun onControllerPause() {
+        runOnUiThread { pauseVideo() }
+    }
+
+    override fun onControllerSeekForward() {
+        runOnUiThread { 
+            webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime += 30", null)
+        }
+    }
+
+    override fun onControllerSeekBackward() {
+        runOnUiThread {
+            webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime -= 15", null)
+        }
+    }
+    
+    // Lifecycle Methods
+    
+    override fun onPause() {
+        super.onPause()
+        // DO NOT PAUSE VIDEO HERE.
+        // Screen off or background triggers this. We want playback to continue.
+        
+        // Android WebView Hack: Try to keep it running
+        webView.onResume() 
+        webView.resumeTimers()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
+        webView.resumeTimers()
+    }
+
+
+    private fun checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!android.provider.Settings.canDrawOverlays(this)) {
+                AlertDialog.Builder(this)
+                    .setTitle("需要最上層顯示權限")
+                    .setMessage("為了確保背景播放和 PiP 模式在關閉螢幕時不被中斷，請授權應用程式顯示在其他應用程式上層。")
+                    .setPositiveButton("去設定") { _, _ ->
+                        val intent = Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        )
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("稍後再說", null)
+                    .show()
+            }
+        }
     }
 
     private fun initWebView() {
@@ -158,6 +241,12 @@ class MainActivity : AppCompatActivity() {
             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
         }
         
+        // Increase WebView priority to prevent background killing
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true)
+        }
+
+        
         // Enable cookies
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             android.webkit.CookieManager.getInstance().apply {
@@ -180,9 +269,17 @@ class MainActivity : AppCompatActivity() {
                         var style = document.createElement('style');
                         style.textContent = 'header, #header-bar, .ytd-masthead, #masthead-container, #related, #comments { display: none !important; }';
                         document.head.appendChild(style);
+                        
+                        // Hack Page Visibility API to keep video playing in background
+                        Object.defineProperty(document, 'hidden', { get: function() { return false; } });
+                        Object.defineProperty(document, 'visibilityState', { get: function() { return 'visible'; } });
+                        window.dispatchEvent(new Event('visibilitychange'));
                     })()
                 """.trimIndent()
                 webView.evaluateJavascript(js, null)
+                
+                // Start checking for video title
+                checkForVideoTitle()
             }
             
             override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
@@ -207,14 +304,39 @@ class MainActivity : AppCompatActivity() {
         webView.post {
             webView.loadUrl(url, extraHeaders)
             
-            // Seek to saved position after video loads
+            // Robust seeking: Wait for video element to be ready
             if (startPosition > 0) {
-                webView.postDelayed({
-                    webView.evaluateJavascript(
-                        "document.getElementsByTagName('video')[0].currentTime = $startPosition",
-                        null
-                    )
-                }, 2000) // Wait 2 seconds for video to load
+                val jsSeek = """
+                    (function() {
+                        var targetTime = $startPosition;
+                        var attempts = 0;
+                        var maxAttempts = 60; // 30 seconds timeout
+                        
+                        var checkVideo = setInterval(function() {
+                            var v = document.querySelector('video');
+                            if (v && v.readyState >= 1) { // HAVE_METADATA
+                                console.log("Restoring position to: " + targetTime);
+                                v.currentTime = targetTime;
+                                
+                                // Verification check
+                                if (Math.abs(v.currentTime - targetTime) < 5) {
+                                    clearInterval(checkVideo);
+                                    // Optional: Ensure it plays if it was stuck
+                                    // v.play(); 
+                                }
+                            }
+                            
+                            attempts++;
+                            if (attempts > maxAttempts) {
+                                clearInterval(checkVideo);
+                                console.log("Timeout waiting for video to restore position");
+                            }
+                        }, 500);
+                    })();
+                """.trimIndent()
+                
+                // Inject script immediately, it will handle the waiting
+                webView.evaluateJavascript(jsSeek, null)
             }
             
             updatePlaybackService(true)
@@ -273,7 +395,7 @@ class MainActivity : AppCompatActivity() {
         btnFavorite = findViewById(R.id.btn_favorite)
         btnHistory = findViewById(R.id.btn_history)
         tvVideoTitle = findViewById(R.id.tv_video_title)
-        tvSpeedDisplay = findViewById(R.id.tv_speed_display)
+        btnRestoreProgress = findViewById(R.id.btn_restore_progress)
 
         loadPlaylist()
         loadHistory()
@@ -297,6 +419,15 @@ class MainActivity : AppCompatActivity() {
         btnFavorite.setOnLongClickListener {
             addToPlaylist("Quick Save")
             true
+        }
+
+        // Login Profile button: Show account menu
+        btnLoginProfile.setOnClickListener {
+            if (authMode == AuthMode.NONE) {
+                showLoginDialog()
+            } else {
+                showLoggedInMenu()
+            }
         }
         
         // History button: Show playback history
@@ -328,6 +459,10 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.btn_speed_up).setOnClickListener { changeSpeed(0.025f) }
         findViewById<ImageButton>(R.id.btn_speed_down).setOnClickListener { changeSpeed(-0.025f) }
+        
+        btnRestoreProgress.setOnClickListener {
+            manualRestoreState()
+        }
     }
 
     private fun changeSpeed(delta: Float) {
@@ -335,20 +470,175 @@ class MainActivity : AppCompatActivity() {
         if (currentPlaybackRate < 0.25f) currentPlaybackRate = 0.25f
         if (currentPlaybackRate > 4.0f) currentPlaybackRate = 4.0f
         
-        webView.evaluateJavascript("document.getElementsByTagName('video')[0].playbackRate = ${"$"}currentPlaybackRate", null)
-        tvSpeedDisplay.text = String.format(Locale.getDefault(), "%.3fx", currentPlaybackRate)
+        // Improve playback speed injection
+        val js = """
+            (function() {
+                var v = document.querySelector('video');
+                if (v) { 
+                    v.playbackRate = $currentPlaybackRate; 
+                    v.defaultPlaybackRate = $currentPlaybackRate;
+                    return v.playbackRate;
+                }
+                return -1;
+            })()
+        """.trimIndent()
+        
+        webView.evaluateJavascript(js) { res ->
+            // Use evaluate callback to confirm (res is the returned value)
+             Toast.makeText(this, String.format(Locale.getDefault(), "Speed: %.3fx", currentPlaybackRate), Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun manualRestoreState() {
+        // Get up to 4 recent videos from history with valid progress
+        val recentSaves = myHistoryVideos
+            .filter { it.lastPosition > 5 } // Only show if played > 5 seconds
+            .distinctBy { it.id }
+            .take(4)
+            
+        if (recentSaves.isEmpty()) {
+            Toast.makeText(this, "沒有最近的播放存檔", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val titles = recentSaves.map { 
+            val cleanTitle = it.title.replace(Regex(" \\[.*?\\]$"), "")
+            "$cleanTitle\n進度: ${formatTime(it.lastPosition)}"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("載入最近進度 (Top 4)")
+            .setItems(titles) { _, which ->
+                val video = recentSaves[which]
+                
+                // If it's the current video, just seek
+                if (video.id == currentVideoId) {
+                    webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime = ${video.lastPosition}", null)
+                    // Also try to restore speed if possible? Assuming speed is global preference or we need to save it in HistoryVideo too.
+                    // For now, keep current speed or use global.
+                    Toast.makeText(this, "已跳轉至 ${formatTime(video.lastPosition)}", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Load different video
+                    if (::tvVideoTitle.isInitialized) tvVideoTitle.text = video.title.replace(Regex(" \\[.*?\\]$"), "")
+                    if (::etVideoId.isInitialized) etVideoId.setText(video.id)
+                    loadWebVideo(video.id, video.lastPosition)
+                    Toast.makeText(this, "正在載入存檔...", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun showFavoriteMenu() {
-        val categories = arrayOf("Novel", "Music", "Learning", "Others")
+        // Get existing categories
+        val categories = mySavedVideos.map { getVideoCategory(it.title) }.distinct().toMutableList()
+        if (!categories.contains("Novel")) categories.add("Novel") // Default
+        categories.sort()
+        categories.add(0, "+ 新增目錄") // Add "New" option at top
+
+        val items = categories.toTypedArray()
+
         AlertDialog.Builder(this)
-            .setTitle("Add to Favorites")
-            .setItems(categories) { _, which ->
-                val category = categories[which]
-                addToPlaylist(category)
+            .setTitle("加入最愛 - 選擇目錄")
+            .setItems(items) { _, which ->
+                if (which == 0) {
+                    // Create New Category
+                    val input = EditText(this)
+                    input.hint = "輸入目錄名稱"
+                    AlertDialog.Builder(this)
+                        .setTitle("建立新目錄")
+                        .setView(input)
+                        .setPositiveButton("確定") { _, _ ->
+                            val newCategory = input.text.toString().trim()
+                            if (newCategory.isNotEmpty()) {
+                                addToPlaylist(newCategory)
+                            }
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                } else {
+                    addToPlaylist(items[which])
+                }
             }
+            .setNegativeButton("取消", null)
             .show()
     }
+
+    private fun getVideoCategory(titleString: String): String {
+        val match = Regex(" \\[([^\\]]+)\\]$").find(titleString)
+        return match?.groupValues?.get(1) ?: "Uncategorized"
+    }
+    
+    private fun getCleanTitle(titleString: String): String {
+        return titleString.replace(Regex(" \\[([^\\]]+)\\]$"), "")
+    }
+
+    private fun addToPlaylist(category: String) {
+        if (mySavedVideos.none { it.id == currentVideoId && getVideoCategory(it.title) == category }) {
+            val title = if (::tvVideoTitle.isInitialized) tvVideoTitle.text.toString() else "Unknown Title"
+            // Store category in title for backward compatibility
+            mySavedVideos.add(SavedVideo("$title [$category]", currentVideoId))
+            savePlaylist()
+            Toast.makeText(this, "已加入目錄 [$category]", Toast.LENGTH_SHORT).show()
+        } else {
+             Toast.makeText(this, "此影片已在目錄 [$category] 中", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun savePlaylist() {
+        getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit { putString("my_playlist", gson.toJson(mySavedVideos)) }
+    }
+
+    private fun showPlaylist() {
+        if (mySavedVideos.isEmpty()) {
+            Toast.makeText(this, "收藏清單是空的", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        // Group by Category
+        val categories = mySavedVideos.map { getVideoCategory(it.title) }.distinct().sorted()
+        val items = categories.toTypedArray()
+        
+        AlertDialog.Builder(this)
+            .setTitle("我的收藏 - 目錄")
+            .setItems(items) { _, which ->
+                showCategoryVideos(items[which])
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+    
+    private fun showCategoryVideos(category: String) {
+        val videosInCat = mySavedVideos.filter { getVideoCategory(it.title) == category }
+        
+        val titles = videosInCat.map { getCleanTitle(it.title) }.toTypedArray()
+        
+        AlertDialog.Builder(this)
+            .setTitle("目錄: $category")
+            .setItems(titles) { _, which ->
+                val video = videosInCat[which]
+                loadWebVideo(video.id)
+                if (::tvVideoTitle.isInitialized) tvVideoTitle.text = getCleanTitle(video.title)
+                if (::etVideoId.isInitialized) etVideoId.setText(video.id)
+                Toast.makeText(this, "正在載入: ${getCleanTitle(video.title)}", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("刪除此目錄") { _, _ ->
+                 AlertDialog.Builder(this)
+                    .setTitle("刪除目錄")
+                    .setMessage("確定要刪除目錄 [$category] 及其中所有影片嗎？")
+                    .setPositiveButton("刪除") { _, _ ->
+                        mySavedVideos.removeAll { getVideoCategory(it.title) == category }
+                        savePlaylist()
+                        Toast.makeText(this, "目錄已刪除", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+            .setNegativeButton("返回", null)
+            .show()
+    }
+
+    // Removed showPlaylistManager as it's replaced by directory management
 
     private fun extractVideoId(input: String): String? {
         if (input.length == 11) return input
@@ -360,6 +650,58 @@ class MainActivity : AppCompatActivity() {
                 else -> null
             }
         } catch (e: Exception) { null }
+    }
+
+    private fun checkForVideoTitle() {
+        // Try multiple ways to get the title
+        val jsCode = """
+            (function() {
+                // Method 1: Get from video-title element (common in playlists/feeds)
+                var el = document.querySelector('#video-title');
+                if (el) return el.textContent.trim();
+                
+                // Method 2: Get from h1.title (desktop video page)
+                el = document.querySelector('h1.title');
+                if (el) return el.textContent.trim();
+                
+                // Method 3: Get from .slim-video-information-title (mobile)
+                el = document.querySelector('.slim-video-information-title');
+                if (el) return el.textContent.trim();
+                
+                // Method 4: Fallback to document title
+                return document.title.replace(' - YouTube', '');
+            })()
+        """.trimIndent()
+
+        webView.evaluateJavascript(jsCode) { result ->
+            val rawTitle = result?.trim('"')?.replace("\\\"", "\"")
+            if (!rawTitle.isNullOrEmpty() && rawTitle != "null" && rawTitle != "YouTube") {
+                val titleChanged = ::tvVideoTitle.isInitialized && tvVideoTitle.text.toString() != rawTitle
+                
+                if (titleChanged) {
+                    tvVideoTitle.text = rawTitle
+                    // Update Service as well
+                    updatePlaybackService(isPlaying)
+                    // Also update History title if playing
+                    addToHistory(currentVideoId)
+                }
+                
+                // Handle pending favorite add from Share Intent
+                if (isPendingAddToFavorites) {
+                    if (::tvVideoTitle.isInitialized) {
+                        // Ensure title is set before showing menu (in case titleChanged was false)
+                        tvVideoTitle.text = rawTitle 
+                        isPendingAddToFavorites = false
+                        showFavoriteMenu()
+                    }
+                }
+            } else {
+                // Retry if title not found (SPA loading)
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    checkForVideoTitle()
+                }, 1000)
+            }
+        }
     }
 
     private fun handleSignInResult(account: GoogleSignInAccount?) {
@@ -482,7 +824,7 @@ class MainActivity : AppCompatActivity() {
         val options = arrayOf(
             "Sign in with Google", 
             "Local Guest",
-            "🔇 Auto Mute: $adSkipStatus"
+            "🔇 自動音量調整: $adSkipStatus"
         )
         AlertDialog.Builder(this).setItems(options) { _, which ->
             when (which) {
@@ -501,7 +843,7 @@ class MainActivity : AppCompatActivity() {
         val options = arrayOf(
             "My YouTube Videos",
             "📺 Watch Later (WebView)",
-            "🔇 Auto Mute: $adSkipStatus",
+            "🔇 自動音量調整: $adSkipStatus",
             "Sign Out"
         )
         AlertDialog.Builder(this).setItems(options) { _, which ->
@@ -524,9 +866,9 @@ class MainActivity : AppCompatActivity() {
         }
         
         val status = if (isAdSkipEnabled) "已開啟" else "已關閉"
-        val msg = if (isAdSkipEnabled) "廣告將自動靜音並嘗試略過" else "自動靜音功能已停用"
+        val msg = if (isAdSkipEnabled) "偵測到異常音量時將自動降低音量" else "自動音量調整已停用"
         
-        Toast.makeText(this, "Auto Mute $status\n$msg", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "自動音量調整 $status\n$msg", Toast.LENGTH_SHORT).show()
         
         // Apply immediately if enabled
         if (isAdSkipEnabled) {
@@ -542,7 +884,7 @@ class MainActivity : AppCompatActivity() {
             (function() {
                 if (window.adSkipperInterval) return; // Prevent multiple injections
                 
-                console.log("Auto Mute Started");
+                console.log("Volume Control Started");
                 window.adSkipperInterval = setInterval(function() {
                     try {
                         var video = document.querySelector('video');
@@ -552,30 +894,27 @@ class MainActivity : AppCompatActivity() {
                         var adOverlay = document.querySelector('.ad-interrupting') || 
                                        document.querySelector('.video-ads .ad-container');
                         
-                        // Check if ad is actually playing (overlay exists and has children)
+                        // Check if overlay is present (implying loud promotional content)
                         if (adOverlay && adOverlay.children.length > 0) {
-                            // Ad is present
+                            // High volume content detected
                             if (video && !video.muted) {
                                 video.muted = true;
-                                console.log("Ad Detected: Muted");
+                                console.log("High Volume: Muted");
                             }
                             
                             if (skipBtn) {
                                 skipBtn.click();
-                                console.log("Ad Skipped");
-                            } else {
-                                // Try to fast forward ad if no skip button (risky, maybe just mute is enough)
-                                // if (video) video.currentTime = video.duration || 1000;
+                                console.log("Volume Normalized");
                             }
                         } else {
-                            // No ad detected
+                            // Normal content
                             if (video && video.muted) {
                                 video.muted = false; // Unmute
-                                console.log("Ad Gone: Unmuted");
+                                console.log("Normal Volume: Unmuted");
                             }
                         }
                     } catch (e) {
-                        console.error("Auto Mute Error", e);
+                        console.error("Volume Control Error", e);
                     }
                 }, 1000);
             })();
@@ -751,16 +1090,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
-    private fun addToPlaylist(category: String = "General") {
-        if (mySavedVideos.none { it.id == currentVideoId }) {
-            val title = if (::tvVideoTitle.isInitialized) tvVideoTitle.text.toString() else "Unknown Title"
-            mySavedVideos.add(SavedVideo("${"$"}title [${"$"}category]", currentVideoId))
-            getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit { putString("my_playlist", gson.toJson(mySavedVideos)) }
-            Toast.makeText(this, "Added to ${"$"}category favorites", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     data class SavedVideo(val title: String, val id: String)
     private val mySavedVideos = mutableListOf<SavedVideo>()
     
@@ -820,79 +1149,7 @@ class MainActivity : AppCompatActivity() {
         saveHistory()
     }
 
-    private fun showPlaylist() {
-        if (mySavedVideos.isEmpty()) {
-            Toast.makeText(this, "收藏清單是空的", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        val titles = mySavedVideos.map { it.title }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("我的收藏 (${mySavedVideos.size} 個影片)")
-            .setItems(titles) { _, which ->
-                val video = mySavedVideos[which]
-                loadWebVideo(video.id)
-                if (::tvVideoTitle.isInitialized) tvVideoTitle.text = video.title
-                if (::etVideoId.isInitialized) etVideoId.setText(video.id)
-                Toast.makeText(this, "正在載入: ${video.title}", Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton("管理收藏") { _, _ ->
-                showPlaylistManager()
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-    
-    private fun showPlaylistManager() {
-        if (mySavedVideos.isEmpty()) {
-            Toast.makeText(this, "收藏清單是空的", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        val titles = mySavedVideos.mapIndexed { index, video -> 
-            "${index + 1}. ${video.title}" 
-        }.toTypedArray()
-        
-        AlertDialog.Builder(this)
-            .setTitle("管理收藏 - 點擊刪除")
-            .setItems(titles) { dialog, which ->
-                val video = mySavedVideos[which]
-                // Confirm deletion
-                AlertDialog.Builder(this)
-                    .setTitle("確認刪除")
-                    .setMessage("確定要刪除「${video.title}」嗎？")
-                    .setPositiveButton("刪除") { _, _ ->
-                        mySavedVideos.removeAt(which)
-                        getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit { 
-                            putString("my_playlist", gson.toJson(mySavedVideos)) 
-                        }
-                        Toast.makeText(this, "已刪除", Toast.LENGTH_SHORT).show()
-                        dialog.dismiss()
-                        // Reopen manager if there are still videos
-                        if (mySavedVideos.isNotEmpty()) {
-                            showPlaylistManager()
-                        }
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-            }
-            .setNeutralButton("清空全部") { _, _ ->
-                AlertDialog.Builder(this)
-                    .setTitle("確認清空")
-                    .setMessage("確定要刪除所有 ${mySavedVideos.size} 個收藏影片嗎？")
-                    .setPositiveButton("清空") { _, _ ->
-                        mySavedVideos.clear()
-                        getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit { 
-                            putString("my_playlist", gson.toJson(mySavedVideos)) 
-                        }
-                        Toast.makeText(this, "已清空收藏清單", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-            }
-            .setNegativeButton("返回", null)
-            .show()
-    }
+
     
     private fun showHistory() {
         if (myHistoryVideos.isEmpty()) {
@@ -902,7 +1159,8 @@ class MainActivity : AppCompatActivity() {
         
         val titles = myHistoryVideos.map { 
             val timeAgo = getTimeAgo(it.timestamp)
-            "${it.title}\n$timeAgo"
+            val cleanTitle = it.title.replace(Regex(" \\[.*?\\]$"), "")
+            "$cleanTitle\n$timeAgo"
         }.toTypedArray()
         
         AlertDialog.Builder(this)
@@ -929,7 +1187,8 @@ class MainActivity : AppCompatActivity() {
         
         val titles = myHistoryVideos.mapIndexed { index, video ->
             val timeAgo = getTimeAgo(video.timestamp)
-            "${index + 1}. ${video.title}\n   $timeAgo"
+            val cleanTitle = video.title.replace(Regex(" \\[.*?\\]$"), "")
+            "${index + 1}. $cleanTitle\n   $timeAgo"
         }.toTypedArray()
         
         AlertDialog.Builder(this)
@@ -1016,6 +1275,20 @@ class MainActivity : AppCompatActivity() {
                     getSharedPreferences("YTPlayerPrefs", MODE_PRIVATE).edit {
                         putString("last_playback_state", gson.toJson(state))
                     }
+                    
+                    // Update History with progress
+                    val historyIndex = myHistoryVideos.indexOfFirst { it.id == currentVideoId }
+                    if (historyIndex != -1) {
+                        try {
+                            val oldItem = myHistoryVideos[historyIndex]
+                            myHistoryVideos[historyIndex] = oldItem.copy(
+                                lastPosition = position,
+                                timestamp = System.currentTimeMillis(),
+                                title = if (::tvVideoTitle.isInitialized) tvVideoTitle.text.toString() else oldItem.title
+                            )
+                            saveHistory()
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -1043,9 +1316,7 @@ class MainActivity : AppCompatActivity() {
                             currentPlaybackRate = state.playbackRate
                             if (::tvVideoTitle.isInitialized) tvVideoTitle.text = state.videoTitle
                             if (::etVideoId.isInitialized) etVideoId.setText(state.videoId)
-                            if (::tvSpeedDisplay.isInitialized) {
-                                tvSpeedDisplay.text = String.format(Locale.getDefault(), "%.3fx", state.playbackRate)
-                            }
+                            // Speed display removed
                             loadWebVideo(state.videoId, state.position)
                         }
                         .setNegativeButton("從頭開始") { _, _ ->
@@ -1075,14 +1346,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    override fun onPause() {
-        super.onPause()
-        savePlaybackState()
-    }
+
     
     override fun onStop() {
         super.onStop()
         savePlaybackState()
+        if (isPlaying) {
+             // Redundant but safe - ensure timers are running even if stoppped
+             webView.resumeTimers()
+        }
     }
 
     override fun onDestroy() {
@@ -1092,7 +1364,9 @@ class MainActivity : AppCompatActivity() {
         // Stop auto-save timer
         saveHandler.removeCallbacks(autoSaveRunnable)
         
-        try { unregisterReceiver(mediaReceiver) } catch (e: Exception) {}
+        // Unregister controller
+        PlaybackController.listener = null
+        
         stopService(Intent(this, MediaPlaybackService::class.java))
         super.onDestroy()
     }
