@@ -828,64 +828,86 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             .show()
     }
 
+    // PiP Action Receiver
+    private val pipReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                "ACTION_PREV" -> webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime -= 15", null)
+                "ACTION_NEXT" -> webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime += 30", null)
+                "ACTION_PLAY" -> playVideo()
+                "ACTION_PAUSE" -> pauseVideo()
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction("ACTION_PREV")
+            addAction("ACTION_NEXT")
+            addAction("ACTION_PLAY")
+            addAction("ACTION_PAUSE")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(pipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(pipReceiver, filter)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(pipReceiver)
+        } catch (e: Exception) {
+            // Receiver not registered
+        }
+        savePlaybackState()
+        if (isPlaying) {
+             webView.resumeTimers()
+        }
+    }
+
     private fun enterPiP() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(16, 9))
-            
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                params.setAutoEnterEnabled(true)
-                // If S+, we don't necessarily need to call enterPictureInPictureMode here if triggered by onUserLeaveHint system, 
-                // but explicit header is safer for manual button. 
-                // However, for onUserLeaveHint, we want explicit entry for pre-S.
-            }
-            
-            // Add custom actions for PIP mode (Android 8.0+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    params.setAutoEnterEnabled(true)
+                }
+                
+                // Add custom actions
                 val actions = ArrayList<android.app.RemoteAction>()
                 
-                // Previous action (Rewind 15s)
-                val prevIntent = PendingIntent.getBroadcast(
-                    this, 0, Intent("ACTION_PREV"),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
+                // Prev
+                val prevIntent = PendingIntent.getBroadcast(this, 0, Intent("ACTION_PREV"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 val prevIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_replay_10)
-                val prevAction = android.app.RemoteAction(
-                    prevIcon, "Previous", "Rewind 15s", prevIntent
-                )
-                actions.add(prevAction)
+                actions.add(android.app.RemoteAction(prevIcon, "Prev", "Rewind", prevIntent))
                 
-                // Play/Pause action
-                val playPauseIntent = PendingIntent.getBroadcast(
-                    this, 1, Intent(if (isPlaying) "ACTION_PAUSE" else "ACTION_PLAY"),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
-                val playPauseIcon = android.graphics.drawable.Icon.createWithResource(
-                    this, if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
-                )
-                val playPauseAction = android.app.RemoteAction(
-                    playPauseIcon, 
-                    if (isPlaying) "Pause" else "Play",
-                    if (isPlaying) "Pause playback" else "Resume playback",
-                    playPauseIntent
-                )
-                actions.add(playPauseAction)
+                // Play/Pause
+                val playIntent = PendingIntent.getBroadcast(this, 1, Intent(if (isPlaying) "ACTION_PAUSE" else "ACTION_PLAY"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                val playIcon = android.graphics.drawable.Icon.createWithResource(this, if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
+                actions.add(android.app.RemoteAction(playIcon, if (isPlaying) "Pause" else "Play", "Toggle Play", playIntent))
                 
-                // Next action (Forward 30s)
-                val nextIntent = PendingIntent.getBroadcast(
-                    this, 2, Intent("ACTION_NEXT"),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
+                // Next
+                val nextIntent = PendingIntent.getBroadcast(this, 2, Intent("ACTION_NEXT"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 val nextIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_forward_30)
-                val nextAction = android.app.RemoteAction(
-                    nextIcon, "Next", "Forward 30s", nextIntent
-                )
-                actions.add(nextAction)
+                actions.add(android.app.RemoteAction(nextIcon, "Next", "Forward", nextIntent))
                 
                 params.setActions(actions)
+                
+                val result = enterPictureInPictureMode(params.build())
+                if (!result) {
+                    Toast.makeText(this, "進入子母畫面失敗 (System declined)", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(this, "錯誤: ${e.message}", Toast.LENGTH_LONG).show()
             }
-            
-            enterPictureInPictureMode(params.build())
+        } else {
+             Toast.makeText(this, "您的裝置不支援子母畫面", Toast.LENGTH_SHORT).show()
         }
     }
     
@@ -1547,14 +1569,8 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
     
 
     
-    override fun onStop() {
-        super.onStop()
-        savePlaybackState()
-        if (isPlaying) {
-             // Redundant but safe - ensure timers are running even if stoppped
-             webView.resumeTimers()
-        }
-    }
+    // Old onStop removed, moved to PiP section
+
 
     override fun onDestroy() {
         // Save state before destroying
