@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/yt_black">
+
+    <!-- Top Toolbar -->
+    <LinearLayout
+        android:id="@+id/top_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/yt_black"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:elevation="4dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="YouTube Novel Player"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="20sp"/>
+
+        <ImageView
+            android:id="@+id/btn_login_profile"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_person_add"
+            app:tint="@android:color/white"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="8dp"/>
+    </LinearLayout>
+
+    <!-- Web Player -->
+    <WebView
+        android:id="@+id/youtube_webview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintTop_toBottomOf="@id/top_toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+
+    <!-- Scrollable Content -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/youtube_webview"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="16dp">
+
+            <!-- Video Info Section -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/tv_video_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Video Title"
+                    android:textColor="@color/yt_text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:maxLines="2"
+                    android:ellipsize="end"/>
+            </LinearLayout>
+
+            <View 
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/yt_divider"/>
+
+            <!-- Novel Control Area -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@color/yt_surface">
+                
+                <!-- First Row: Main Playback Controls -->
+                <LinearLayout
+                    android:id="@+id/controls_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <!-- Save to Playlist -->
+                    <ImageButton
+                        android:id="@+id/btn_action_save"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_playlist_add"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"/>
+
+                    <!-- Favorite -->
+                    <ImageButton
+                        android:id="@+id/btn_favorite"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_star_border"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"/>
+
+                    <!-- History -->
+                    <ImageButton
+                        android:id="@+id/btn_history"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_history"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"/>
+
+                    <!-- Rewind 15s -->
+                    <ImageButton
+                        android:id="@+id/btn_rewind"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/ic_replay_10"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:layout_marginHorizontal="4dp"/>
+
+                    <!-- Play/Pause (Center) -->
+                    <FrameLayout
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:layout_marginHorizontal="8dp"
+                        android:background="@drawable/bg_subscribe_button"
+                        android:backgroundTint="@color/yt_white">
+                         <ImageButton
+                            android:id="@+id/btn_play_pause"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:src="@drawable/ic_play_arrow"
+                            app:tint="@color/yt_black"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:padding="14dp"/>
+                    </FrameLayout>
+
+                    <!-- Forward 30s -->
+                    <ImageButton
+                        android:id="@+id/btn_forward"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/ic_forward_30"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:layout_marginHorizontal="4dp"/>
+                </LinearLayout>
+                
+                <!-- Second Row: Speed Controls + PIP -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="12dp"
+                    android:paddingVertical="8dp">
+
+                    <!-- PIP Button -->
+                    <ImageButton
+                        android:id="@+id/btn_pip_small"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_picture_in_picture"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:scaleType="fitCenter"
+                        android:padding="8dp"
+                        android:layout_marginEnd="16dp"/>
+
+                    <!-- Speed Down -->
+                    <ImageButton
+                        android:id="@+id/btn_speed_down"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_remove"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="12dp"/>
+
+                    <!-- Restore Progress Button (Replaces Text) -->
+                    <ImageButton
+                        android:id="@+id/btn_restore_progress"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_restore"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="12dp"
+                        android:layout_marginHorizontal="8dp"
+                        android:tooltipText="恢復上次播放進度"/>
+
+                    <!-- Speed Up -->
+                    <ImageButton
+                        android:id="@+id/btn_speed_up"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_add"
+                        app:tint="@color/yt_text_primary"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="12dp"/>
+                </LinearLayout>
+            </LinearLayout>
+            
+            <View 
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/yt_divider"/>
+                
+            <!-- Load Video Section -->
+             <LinearLayout
+                android:id="@+id/input_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:background="@color/yt_surface">
+                
+                <EditText
+                    android:id="@+id/et_video_id"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Paste URL or ID"
+                    android:textColor="@color/yt_text_primary"
+                    android:textColorHint="@color/yt_text_secondary"
+                    android:backgroundTint="@color/yt_text_secondary"/>
+                
+                <Button
+                    android:id="@+id/btn_load"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="LOAD"
+                    android:backgroundTint="@color/yt_surface"
+                    android:textColor="@color/yt_text_primary"/>
+                    
+                <Button
+                    android:id="@+id/btn_load_wl"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="WL"
+                    android:backgroundTint="@color/yt_surface"
+                    android:textColor="@color/yt_text_primary"
+                    android:layout_marginStart="4dp"
+                    android:tooltipText="Load Watch Later"/>
+            </LinearLayout>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

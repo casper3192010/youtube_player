@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M12,5V1L7,6l5,5V7c3.31,0 6,2.69 6,6s-2.69,6 -6,6 -6,-2.69 -6,-6H4c0,4.42 3.58,8 8,8s8,-3.58 8,-8 -3.58,-8 -8,-8zm-1.1,12.98L9.66,13.6l-0.57,0.57 -0.83,-0.83 2.14,-2.14 2.14,2.14 -0.83,0.83 -0.57,-0.57L10.9,17.98z"/>
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M11.5,13.5m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0"
+      android:fillAlpha="0"/> 
+  <!-- Just a generic replay icon, usually has number inside but simplified here or use standard -->
+</vector>
