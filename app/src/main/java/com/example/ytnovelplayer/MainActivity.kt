@@ -197,6 +197,13 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
         webView.resumeTimers()
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isPlaying && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            enterPiP()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         webView.onResume()
@@ -825,6 +832,13 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                params.setAutoEnterEnabled(true)
+                // If S+, we don't necessarily need to call enterPictureInPictureMode here if triggered by onUserLeaveHint system, 
+                // but explicit header is safer for manual button. 
+                // However, for onUserLeaveHint, we want explicit entry for pre-S.
+            }
             
             // Add custom actions for PIP mode (Android 8.0+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
