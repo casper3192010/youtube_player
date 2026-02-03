@@ -382,6 +382,9 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
         if (::btnPlayPause.isInitialized) {
             btnPlayPause.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
         }
+        
+        // Update PiP controls if active
+        updatePiPParams()
     }
 
     private fun playVideo() {
@@ -831,11 +834,14 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
     // PiP Action Receiver
     private val pipReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            // Debug Toast
+            // Toast.makeText(context, "PiP Action: ${intent?.action}", Toast.LENGTH_SHORT).show()
+            
             when (intent?.action) {
-                "ACTION_PREV" -> webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime -= 15", null)
-                "ACTION_NEXT" -> webView.evaluateJavascript("document.getElementsByTagName('video')[0].currentTime += 30", null)
-                "ACTION_PLAY" -> playVideo()
-                "ACTION_PAUSE" -> pauseVideo()
+                "com.example.ytnovelplayer.PIP_PREV" -> PlaybackController.triggerSeekBackward()
+                "com.example.ytnovelplayer.PIP_NEXT" -> PlaybackController.triggerSeekForward()
+                "com.example.ytnovelplayer.PIP_PLAY" -> PlaybackController.triggerPlay()
+                "com.example.ytnovelplayer.PIP_PAUSE" -> PlaybackController.triggerPause()
             }
         }
     }
@@ -843,10 +849,10 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
     override fun onStart() {
         super.onStart()
         val filter = IntentFilter().apply {
-            addAction("ACTION_PREV")
-            addAction("ACTION_NEXT")
-            addAction("ACTION_PLAY")
-            addAction("ACTION_PAUSE")
+            addAction("com.example.ytnovelplayer.PIP_PREV")
+            addAction("com.example.ytnovelplayer.PIP_NEXT")
+            addAction("com.example.ytnovelplayer.PIP_PLAY")
+            addAction("com.example.ytnovelplayer.PIP_PAUSE")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(pipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -857,14 +863,67 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
 
     override fun onStop() {
         super.onStop()
+        // Do NOT unregister receiver here if we want it to work in background/stop state? 
+        // Actually onStop IS called when screen turns off. 
+        // If we unregister, we lose controls on lock screen (if PiP turns into media session). 
+        // But PiP window IS visible, so onStop shouldn't be called for PiP.
+        // However, safely unregistering to prevent leaks is standard.
+        // Let's rely on MediaSession for Lock Screen, and Receiver for PiP window.
         try {
             unregisterReceiver(pipReceiver)
-        } catch (e: Exception) {
-            // Receiver not registered
-        }
+        } catch (e: Exception) { }
+        
         savePlaybackState()
         if (isPlaying) {
              webView.resumeTimers()
+        }
+    }
+    
+    private fun getPiPActions(): ArrayList<android.app.RemoteAction> {
+        val actions = ArrayList<android.app.RemoteAction>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Prev
+            val prevIntent = PendingIntent.getBroadcast(
+                this, 0, 
+                Intent("com.example.ytnovelplayer.PIP_PREV").setPackage(packageName), 
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val prevIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_replay_10)
+            actions.add(android.app.RemoteAction(prevIcon, "Prev", "Rewind", prevIntent))
+            
+            // Play/Pause
+            val actionName = if (isPlaying) "com.example.ytnovelplayer.PIP_PAUSE" else "com.example.ytnovelplayer.PIP_PLAY"
+            val playIntent = PendingIntent.getBroadcast(
+                this, 1, 
+                Intent(actionName).setPackage(packageName), 
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val playIcon = android.graphics.drawable.Icon.createWithResource(this, if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
+            actions.add(android.app.RemoteAction(playIcon, if (isPlaying) "Pause" else "Play", "Toggle Play", playIntent))
+            
+            // Next
+            val nextIntent = PendingIntent.getBroadcast(
+                this, 2, 
+                Intent("com.example.ytnovelplayer.PIP_NEXT").setPackage(packageName), 
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val nextIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_forward_30)
+            actions.add(android.app.RemoteAction(nextIcon, "Next", "Forward", nextIntent))
+        }
+        return actions
+    }
+    
+    // Update PiP params dynamically when state changes
+    private fun updatePiPParams() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode) {
+             try {
+                val params = PictureInPictureParams.Builder()
+                    .setActions(getPiPActions())
+                    .build()
+                setPictureInPictureParams(params)
+             } catch (e: Exception) {
+                 e.printStackTrace()
+             }
         }
     }
 
@@ -873,30 +932,11 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             try {
                 val params = PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
+                    .setActions(getPiPActions())
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     params.setAutoEnterEnabled(true)
                 }
-                
-                // Add custom actions
-                val actions = ArrayList<android.app.RemoteAction>()
-                
-                // Prev
-                val prevIntent = PendingIntent.getBroadcast(this, 0, Intent("ACTION_PREV"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                val prevIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_replay_10)
-                actions.add(android.app.RemoteAction(prevIcon, "Prev", "Rewind", prevIntent))
-                
-                // Play/Pause
-                val playIntent = PendingIntent.getBroadcast(this, 1, Intent(if (isPlaying) "ACTION_PAUSE" else "ACTION_PLAY"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                val playIcon = android.graphics.drawable.Icon.createWithResource(this, if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
-                actions.add(android.app.RemoteAction(playIcon, if (isPlaying) "Pause" else "Play", "Toggle Play", playIntent))
-                
-                // Next
-                val nextIntent = PendingIntent.getBroadcast(this, 2, Intent("ACTION_NEXT"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                val nextIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_forward_30)
-                actions.add(android.app.RemoteAction(nextIcon, "Next", "Forward", nextIntent))
-                
-                params.setActions(actions)
                 
                 val result = enterPictureInPictureMode(params.build())
                 if (!result) {
