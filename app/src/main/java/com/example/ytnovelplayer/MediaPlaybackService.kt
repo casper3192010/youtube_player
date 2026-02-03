@@ -173,22 +173,42 @@ class MediaPlaybackService : Service() {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
-        // Use MediaButtonReceiver to build standard media intents that route to MediaSession
+        // Use Explicit Broadcasts to trigger MainActivity actions directly (same as PiP)
+        
+        val playPendingIntent = PendingIntent.getBroadcast(
+            this, 100, 
+            Intent("com.example.ytnovelplayer.action.CONTROL_PLAY").setPackage(packageName), 
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         val playAction = NotificationCompat.Action(
-            R.drawable.ic_play_arrow, "Play",
-            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY)
+            R.drawable.ic_play_arrow, "Play", playPendingIntent
+        )
+        
+        val pausePendingIntent = PendingIntent.getBroadcast(
+            this, 101, 
+            Intent("com.example.ytnovelplayer.action.CONTROL_PAUSE").setPackage(packageName), 
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val pauseAction = NotificationCompat.Action(
-            R.drawable.ic_pause, "Pause",
-            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PAUSE)
+            R.drawable.ic_pause, "Pause", pausePendingIntent
+        )
+        
+        val nextPendingIntent = PendingIntent.getBroadcast(
+            this, 102, 
+            Intent("com.example.ytnovelplayer.action.CONTROL_NEXT").setPackage(packageName), 
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val nextAction = NotificationCompat.Action(
-            R.drawable.ic_forward_30, "Next",
-            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
+            R.drawable.ic_forward_30, "Next", nextPendingIntent
+        )
+        
+        val prevPendingIntent = PendingIntent.getBroadcast(
+            this, 103, 
+            Intent("com.example.ytnovelplayer.action.CONTROL_PREV").setPackage(packageName), 
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val prevAction = NotificationCompat.Action(
-            R.drawable.ic_replay_10, "Prev",
-            MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+            R.drawable.ic_replay_10, "Prev", prevPendingIntent
         )
 
         val playPauseAction = if (isPlaying) pauseAction else playAction

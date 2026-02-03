@@ -838,10 +838,10 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             // Toast.makeText(context, "PiP Action: ${intent?.action}", Toast.LENGTH_SHORT).show()
             
             when (intent?.action) {
-                "com.example.ytnovelplayer.PIP_PREV" -> PlaybackController.triggerSeekBackward()
-                "com.example.ytnovelplayer.PIP_NEXT" -> PlaybackController.triggerSeekForward()
-                "com.example.ytnovelplayer.PIP_PLAY" -> PlaybackController.triggerPlay()
-                "com.example.ytnovelplayer.PIP_PAUSE" -> PlaybackController.triggerPause()
+                "com.example.ytnovelplayer.action.CONTROL_PREV" -> PlaybackController.triggerSeekBackward()
+                "com.example.ytnovelplayer.action.CONTROL_NEXT" -> PlaybackController.triggerSeekForward()
+                "com.example.ytnovelplayer.action.CONTROL_PLAY" -> PlaybackController.triggerPlay()
+                "com.example.ytnovelplayer.action.CONTROL_PAUSE" -> PlaybackController.triggerPause()
             }
         }
     }
@@ -849,10 +849,10 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
     override fun onStart() {
         super.onStart()
         val filter = IntentFilter().apply {
-            addAction("com.example.ytnovelplayer.PIP_PREV")
-            addAction("com.example.ytnovelplayer.PIP_NEXT")
-            addAction("com.example.ytnovelplayer.PIP_PLAY")
-            addAction("com.example.ytnovelplayer.PIP_PAUSE")
+            addAction("com.example.ytnovelplayer.action.CONTROL_PREV")
+            addAction("com.example.ytnovelplayer.action.CONTROL_NEXT")
+            addAction("com.example.ytnovelplayer.action.CONTROL_PLAY")
+            addAction("com.example.ytnovelplayer.action.CONTROL_PAUSE")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(pipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -885,14 +885,14 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             // Prev
             val prevIntent = PendingIntent.getBroadcast(
                 this, 0, 
-                Intent("com.example.ytnovelplayer.PIP_PREV").setPackage(packageName), 
+                Intent("com.example.ytnovelplayer.action.CONTROL_PREV").setPackage(packageName), 
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             val prevIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_replay_10)
             actions.add(android.app.RemoteAction(prevIcon, "Prev", "Rewind", prevIntent))
             
             // Play/Pause
-            val actionName = if (isPlaying) "com.example.ytnovelplayer.PIP_PAUSE" else "com.example.ytnovelplayer.PIP_PLAY"
+            val actionName = if (isPlaying) "com.example.ytnovelplayer.action.CONTROL_PAUSE" else "com.example.ytnovelplayer.action.CONTROL_PLAY"
             val playIntent = PendingIntent.getBroadcast(
                 this, 1, 
                 Intent(actionName).setPackage(packageName), 
@@ -904,7 +904,7 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             // Next
             val nextIntent = PendingIntent.getBroadcast(
                 this, 2, 
-                Intent("com.example.ytnovelplayer.PIP_NEXT").setPackage(packageName), 
+                Intent("com.example.ytnovelplayer.action.CONTROL_NEXT").setPackage(packageName), 
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             val nextIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_forward_30)
