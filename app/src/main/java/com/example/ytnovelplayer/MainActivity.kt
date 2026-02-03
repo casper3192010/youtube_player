@@ -73,12 +73,52 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
     private lateinit var googleSignInClient: GoogleSignInClient
     private var isPendingAddToFavorites = false
     
-    // Auto-save timer for playback state
+    // Heartbeat for Progress Sync and WebView KeepAlive
+    private val heartbeatHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            if (isPlaying && ::webView.isInitialized) {
+                // Fetch current time, duration, and speed
+                webView.evaluateJavascript(
+                    "(function(){ var v=document.querySelector('video'); return v ? v.currentTime + ',' + v.duration + ',' + v.playbackRate : ''; })()"
+                ) { result ->
+                    val data = result?.replace("\"", "")?.split(",")
+                    if (data != null && data.size >= 3) {
+                        try {
+                            val position = data[0].toFloatOrNull() ?: 0f
+                            val duration = data[1].toFloatOrNull() ?: 0f
+                            val speed = data[2].toFloatOrNull() ?: 1f
+                            
+                            currentPosition = position.toInt()
+                            currentPlaybackRate = speed
+                            
+                            // Broadcast to Service to update MediaSession
+                            val intent = Intent(this@MainActivity, MediaPlaybackService::class.java).apply {
+                                action = "com.example.ytnovelplayer.action.UPDATE_PLAYBACK_STATE"
+                                putExtra("POSITION", (position * 1000).toLong())
+                                putExtra("DURATION", (duration * 1000).toLong())
+                                putExtra("SPEED", speed)
+                                putExtra("IS_PLAYING", true)
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(intent)
+                            } else {
+                                startService(intent)
+                            }
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
+                }
+            }
+            heartbeatHandler.postDelayed(this, 1000) // 1 second tick
+        }
+    }
+    
+    // Auto-save timer for playback state (Reduced frequency to purely save to disk, Heartbeat handles UI)
     private val saveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val autoSaveRunnable = object : Runnable {
         override fun run() {
             savePlaybackState()
-            saveHandler.postDelayed(this, 5000) // Save every 5 seconds
+            saveHandler.postDelayed(this, 10000) // Save every 10 seconds to disk
         }
     }
 
@@ -136,8 +176,9 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             restorePlaybackState()
         }
         
-        // Start auto-save timer
-        saveHandler.postDelayed(autoSaveRunnable, 5000)
+        // Start timers
+        saveHandler.postDelayed(autoSaveRunnable, 10000)
+        heartbeatHandler.post(heartbeatRunnable)
     }
 
     override fun onNewIntent(intent: Intent?) {

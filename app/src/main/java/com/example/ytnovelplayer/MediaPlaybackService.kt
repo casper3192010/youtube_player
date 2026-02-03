@@ -132,6 +132,42 @@ class MediaPlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "com.example.ytnovelplayer.action.UPDATE_PLAYBACK_STATE") {
+            val position = intent.getLongExtra("POSITION", 0L)
+            val duration = intent.getLongExtra("DURATION", 0L)
+            val speed = intent.getFloatExtra("SPEED", 1.0f)
+            val isPlaying = intent.getBooleanExtra("IS_PLAYING", false)
+            
+            // Update MediaSession State
+            val stateBuilder = PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                    PlaybackStateCompat.ACTION_PAUSE or
+                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                    PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                    PlaybackStateCompat.ACTION_SEEK_TO
+                )
+                .setState(
+                    if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
+                    position,
+                    speed
+                )
+            
+            mediaSession.setPlaybackState(stateBuilder.build())
+            
+            // Update Metadata (Duration)
+            if (duration > 0) {
+                 val metadata = android.support.v4.media.MediaMetadataCompat.Builder()
+                    .putLong(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+                    .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE, "YouTube Novel Player") 
+                    .build()
+                 mediaSession.setMetadata(metadata)
+            }
+            
+            return START_NOT_STICKY
+        }
+        
         val title = intent?.getStringExtra("VIDEO_TITLE") ?: "YouTube Novel Player"
         val isPlaying = intent?.getBooleanAsDefault("IS_PLAYING", false) ?: false
         
@@ -146,18 +182,16 @@ class MediaPlaybackService : Service() {
             mediaSession.setPlaybackState(
                 PlaybackStateCompat.Builder()
                     .setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1.0f)
-                    .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_PAUSE or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                    .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_PAUSE or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or PlaybackStateCompat.ACTION_SEEK_TO)
                     .build()
             )
         } else {
             if (wakeLock?.isHeld == true) wakeLock?.release()
-            // Don't abandon focus immediately on pause, let the user manually resume or use another app to steal focus
-            // abandonAudioFocus() 
             
             mediaSession.setPlaybackState(
                 PlaybackStateCompat.Builder()
                     .setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 0.0f)
-                    .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                    .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or PlaybackStateCompat.ACTION_SEEK_TO)
                     .build()
             )
         }
