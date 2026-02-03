@@ -831,6 +831,18 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
             .show()
     }
 
+    // Screen Off Receiver to trigger PiP
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                if (isPlaying && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Try to enter PiP to keep playback active
+                    enterPiP()
+                }
+            }
+        }
+    }
+
     // PiP Action Receiver
     private val pipReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -859,18 +871,17 @@ class MainActivity : AppCompatActivity(), PlaybackController.Callback {
         } else {
             registerReceiver(pipReceiver, filter)
         }
+        
+        // Register Screen Off Receiver
+        val screenOffFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        registerReceiver(screenOffReceiver, screenOffFilter)
     }
 
     override fun onStop() {
         super.onStop()
-        // Do NOT unregister receiver here if we want it to work in background/stop state? 
-        // Actually onStop IS called when screen turns off. 
-        // If we unregister, we lose controls on lock screen (if PiP turns into media session). 
-        // But PiP window IS visible, so onStop shouldn't be called for PiP.
-        // However, safely unregistering to prevent leaks is standard.
-        // Let's rely on MediaSession for Lock Screen, and Receiver for PiP window.
         try {
             unregisterReceiver(pipReceiver)
+            unregisterReceiver(screenOffReceiver)
         } catch (e: Exception) { }
         
         savePlaybackState()
