@@ -21,6 +21,7 @@ class MediaPlaybackService : Service() {
     private val CHANNEL_ID = "playback_channel"
     private val NOTIFICATION_ID = 1
     private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
 
     private lateinit var audioManager: android.media.AudioManager
     private var audioFocusRequest: android.media.AudioFocusRequest? = null
@@ -56,6 +57,16 @@ class MediaPlaybackService : Service() {
         // Acquire WakeLock to keep CPU running during playback
         val powerManager = getSystemService(android.os.PowerManager::class.java)
         wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "YouTubeNovelPlayer:PlaybackWakeLock")
+        
+        // Acquire WifiLock
+        val wifiManager = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            wifiLock = wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "YouTubeNovelPlayer:WifiLock")
+        } else {
+            @Suppress("DEPRECATION")
+            wifiLock = wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL, "YouTubeNovelPlayer:WifiLock")
+        }
+        wifiLock?.setReferenceCounted(false)
         
         mediaSession = MediaSessionCompat(this, "MediaPlaybackService")
         mediaSession.isActive = true 
@@ -174,9 +185,10 @@ class MediaPlaybackService : Service() {
         // Ensure MediaSession is always active to receive button events
         mediaSession.isActive = true
         
-        // Manage WakeLock and Audio Focus
+        // Manage WakeLock, WifiLock and Audio Focus
         if (isPlaying) {
             if (wakeLock?.isHeld == false) wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24 hours max
+            if (wifiLock?.isHeld == false) wifiLock?.acquire()
             requestAudioFocus()
             
             mediaSession.setPlaybackState(
@@ -187,6 +199,7 @@ class MediaPlaybackService : Service() {
             )
         } else {
             if (wakeLock?.isHeld == true) wakeLock?.release()
+            if (wifiLock?.isHeld == true) wifiLock?.release()
             
             mediaSession.setPlaybackState(
                 PlaybackStateCompat.Builder()
@@ -286,6 +299,7 @@ class MediaPlaybackService : Service() {
 
     override fun onDestroy() {
         if (wakeLock?.isHeld == true) wakeLock?.release()
+        if (wifiLock?.isHeld == true) wifiLock?.release()
         mediaSession.release()
         super.onDestroy()
     }
